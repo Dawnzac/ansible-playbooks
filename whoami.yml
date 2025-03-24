@@ -1,0 +1,8 @@
+---
+- name: Get Whoami
+  hosts: lab1
+  gather_facts: no
+
+  tasks:
+  - name: Get whoami information
+    win_whoami:

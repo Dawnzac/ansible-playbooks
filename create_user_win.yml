@@ -1,0 +1,13 @@
+---
+- name: create user
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+
+  tasks:
+  - name: Ensure user is present
+    ansible.windows.win_user:
+      name: Macfast
+      password: 123
+      state: present
+      groups:
+        - Users

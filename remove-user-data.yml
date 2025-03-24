@@ -1,0 +1,50 @@
+---
+- name: Undo user changes and restore disabled accounts
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+    - name: Log off user 'exam' if logged in
+      ansible.windows.win_shell: |
+        $user = quser | Select-String -Pattern 'exam'
+        if ($user) {
+          $sessionId = ($user -split '\s+')[2]
+          logoff $sessionId
+        }
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Remove the 'exam' user
+      ansible.windows.win_user:
+        name: exam
+        state: absent
+
+    - name: Stop processes locking the profile folder
+      ansible.windows.win_shell: |
+        $lockedFiles = Get-Process | Where-Object { $_.ProcessName -like "*search*" -or $_.ProcessName -like "*explorer*" -or $_.ProcessName -like "*activity*" }
+        foreach ($process in $lockedFiles) {
+          Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Force delete user profile folder
+      ansible.windows.win_shell: |
+        Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "C:\Users\exam" -Recurse -Force
+      register: profile_delete
+      ignore_errors: yes
+      failed_when: profile_delete.rc != 0 and "Access is denied" not in profile_delete.stderr
+
+    - name: Remove registry profile entry for 'exam'
+      ansible.windows.win_shell: |
+        $sid = (New-Object System.Security.Principal.NTAccount("exam")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+        $profileKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+        if (Test-Path $profileKey) {
+          Remove-Item -Path $profileKey -Force -Recurse
+          Write-Output "Profile entry removed: $profileKey"
+        } else {
+          Write-Output "No profile entry found for exam."
+        }
+      register: remove_profile_output
+      changed_when: "'Profile entry removed' in remove_profile_output.stdout"
+# sudo ansible-playbook re-activate_disabled_accounts.yml --limit 146 --ask-vault-pass

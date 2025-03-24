@@ -1,0 +1,8 @@
+- name: Wake on LAN
+  hosts: lab1
+  gather_facts: no
+  tasks:
+    - name: Send a magic Wake-on-LAN packet to A4:AE:14:1D:F6:D0
+      win_wakeonlan:
+        mac: A4:AE:14:1D:F6:D0
+        broadcast: 255.255.255.255

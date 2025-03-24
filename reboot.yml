@@ -1,0 +1,9 @@
+---
+- name: Play to Reboot Windows
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+
+  tasks:
+  - name: Reboot machine and send a message
+    ansible.windows.win_command:
+      cmd: shutdown -r

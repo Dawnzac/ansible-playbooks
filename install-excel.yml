@@ -1,0 +1,31 @@
+---
+- name: Install Microsoft Excel via Office Deployment Tool
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+
+    - name: Ensure C:\Temp directory exists
+      ansible.windows.win_file:
+        path: "C:\\Temp"
+        state: directory
+
+    - name: Download Office Deployment Tool (ODT)
+      ansible.windows.win_get_url:
+        url: "http://172.40.1.11:8000/officedeploymenttool_18526-20146.exe"
+        dest: "C:\\Temp\\officedeploymenttool.exe"
+
+    - name: Run ODT to extract files
+      ansible.windows.win_command: "C:\\Temp\\officedeploymenttool.exe /quiet /extract:C:\\Temp\\OfficeODT"
+
+    - name: Create configuration XML for Excel only
+      ansible.windows.win_get_url:
+        url: "http://172.40.1.11:8000/configuration.xml"
+        dest: "C:\\Temp\\configuration.xml"
+
+    - name: Install Microsoft Excel using ODT
+      ansible.windows.win_command: "C:\\Temp\\OfficeODT\\setup.exe /configure C:\\Temp\\OfficeODT\\configuration.xml"
+
+    - name: Clean up installation files
+      ansible.windows.win_file:
+        path: "C:\\Temp\\OfficeODT"
+        state: absent

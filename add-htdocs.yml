@@ -1,0 +1,53 @@
+---
+- name: Copy Folder from Local Server to XAMPP htdocs
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  gather_facts: false
+
+  vars:
+    download_url: "http://172.40.1.11:8000/htdocs.zip" 
+    download_path: "C:\\Temp\\project_folder.zip"
+    extract_path: "C:\\xampp"
+
+  tasks:
+
+    - name: Ensure C:\Temp directory exists
+      win_file:
+        path: "C:\\Temp"
+        state: directory
+
+    - name: Download the folder or ZIP from local server
+      win_get_url:
+        url: "{{ download_url }}"
+        dest: "{{ download_path }}"
+
+    - name: Ensure htdocs folder exists
+      win_file:
+        path: "{{ extract_path }}"
+        state: directory
+
+    - name: Extract the folder into htdocs
+      win_unzip:
+        src: "{{ download_path }}"
+        dest: "{{ extract_path }}"
+        delete_archive: true
+      when: download_path.endswith('.zip')
+
+    - name: Clean up downloaded files
+      win_file:
+        path: "{{ download_path }}"
+        state: absent
+
+    - name: Confirm project folder copied to htdocs
+      win_stat:
+        path: "{{ extract_path }}\\htdocs"
+      register: htdocs_folder_status
+
+    - name: Check copy result
+      debug:
+        msg: >
+          {% if htdocs_folder_status.stat.exists %}
+          Folder successfully copied to {{ extract_path }}!
+          {% else %}
+          Folder not copied successfully.
+          {% endif %}

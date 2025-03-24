@@ -1,0 +1,74 @@
+---
+- name: Install Applications using Winget
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: false
+  tasks:
+    - name: Ensure C:\Temp directory exists
+      win_file:
+        path: C:\Temp
+        state: directory
+
+    - name: Ensure Winget is available
+      win_command: "winget --version"
+      register: winget_check
+      ignore_errors: yes
+
+    - name: Check if Winget is already installed
+      win_command: "winget --version"
+      register: winget_check
+      ignore_errors: yes
+
+    - name: Download Winget (App Installer) if not installed
+      ansible.windows.win_get_url:
+        url: "http://172.40.1.11:8000/Microsoft.DesktopAppInstaller.msixbundle"
+        dest: "C:\\Temp\\AppInstaller.msixbundle"
+        force: yes
+
+      when: winget_check.rc != 0
+
+    - name: Install Winget using App Installer
+      win_shell: |
+        Add-AppxPackage -Path "C:\\Temp\\AppInstaller.msixbundle"
+      when: winget_check.rc != 0
+      register: install_winget
+      ignore_errors: yes
+
+    - name: Verify Winget Installation
+      win_command: "winget --version"
+      register: winget_verify
+      failed_when: winget_verify.rc != 0
+      when: install_winget is succeeded
+
+    - name: Install Google Chrome
+      win_command: "winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements"
+      register: chrome_result
+      changed_when: "'successful' in chrome_result.stdout"
+
+    - name: Install WinRAR
+      win_command: "winget install --id RARLab.WinRAR --silent --accept-package-agreements --accept-source-agreements"
+      register: winrar_result
+      changed_when: "'successful' in winrar_result.stdout"
+
+    - name: Install Notepad++
+      win_command: "winget install --id Notepad++.Notepad++ --silent --accept-package-agreements --accept-source-agreements"
+      register: notepad_result
+      changed_when: "'successful' in notepad_result.stdout"
+
+    - name: Install XAMPP
+      win_command: "winget install --id ApacheFriends.XAMPP --silent --accept-package-agreements --accept-source-agreements"
+      register: xampp_result
+      changed_when: "'successful' in xampp_result.stdout"
+
+    - name: Install NetBeans 8.2
+      win_command: "winget install --id Apache.NetBeans.8.2 --silent --accept-package-agreements --accept-source-agreements"
+      register: netbeans_result
+      changed_when: "'successful' in netbeans_result.stdout"
+
+    - name: Display Installation Results
+      debug:
+        msg:
+          - "Chrome: {{ chrome_result.stdout }}"
+          - "WinRAR: {{ winrar_result.stdout }}"
+          - "Notepad++: {{ notepad_result.stdout }}"
+          - "XAMPP: {{ xampp_result.stdout }}"
+          - "NetBeans 8.2: {{ netbeans_result.stdout }}"

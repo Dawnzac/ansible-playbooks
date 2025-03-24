@@ -1,0 +1,85 @@
+---
+- name: Install Chocolatey and Applications
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: false
+  tasks:
+    ### Step 1: Check if Chocolatey is Installed
+    - name: Check if Chocolatey is already installed
+      win_command: choco -v
+      register: choco_check
+      ignore_errors: yes
+
+    ### Step 2: Install Chocolatey if Missing
+    - name: Install Chocolatey if not present
+      win_shell: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force;
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+        iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+      when: choco_check.rc != 0
+      register: choco_install
+
+    - name: Pause for 10 seconds after installing Chocolatey
+      pause:
+        seconds: 10
+      when: choco_install is changed
+
+    ### Step 3: Verify Chocolatey Installation
+    - name: Verify Chocolatey Installation
+      win_command: choco -v
+      register: choco_verify
+      failed_when: choco_verify.rc != 0
+      when: choco_install is succeeded or choco_check.rc == 0
+
+    ### Step 4: Upgrade Chocolatey to Latest Version
+    - name: Upgrade Chocolatey to the latest version
+      win_command: choco upgrade chocolatey -y
+      when: choco_verify.rc == 0
+
+    ### Step 5: Install Google Chrome
+    - name: Install Google Chrome
+      win_chocolatey:
+        name: googlechrome
+        state: present
+        ignore_checksums: yes
+
+    ### Step 6: Install WinRAR
+    - name: Install WinRAR
+      win_chocolatey:
+        name: winrar
+        state: present
+        ignore_checksums: yes
+
+    ### Step 7: Install Notepad++
+    - name: Install Notepad++
+      win_chocolatey:
+        name: notepadplusplus
+        state: present
+        ignore_checksums: yes
+
+    ### Step 8: Install XAMPP
+    - name: Install XAMPP
+      win_chocolatey:
+        name: xampp
+        state: present
+        ignore_checksums: yes
+
+    ### Step 9: Install NetBeans 8.2
+    - name: Install NetBeans 8.2
+      win_chocolatey:
+        name: netbeans
+        version: "8.2"
+        state: present
+        ignore_checksums: yes
+
+    ### Step 10: Clean up Chocolatey Cache (Optional)
+    - name: Clean Chocolatey Cache
+      win_shell: choco clean
+
+    ### Step 11: List Installed Packages
+    - name: List installed packages
+      win_shell: choco list --local-only
+      register: installed_packages
+
+    - name: Display installed package list
+      debug:
+        var: installed_packages.stdout_lines

@@ -1,0 +1,75 @@
+---
+- name: Uninstall XAMPP from Windows
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+
+    - name: Stop XAMPP services (if running)
+      ansible.windows.win_service:
+        name: "{{ item }}"
+        state: stopped
+      ignore_errors: yes
+      loop:
+        - "Apache2.4"
+        - "mysql"
+        - "FileZillaServer"
+
+    - name: Kill any remaining XAMPP processes
+      ansible.windows.win_shell: |
+        taskkill /F /IM httpd.exe /IM mysqld.exe /IM FileZillaServer.exe /IM xampp-control.exe /IM xampp_start.exe /IM xampp_stop.exe /T
+      ignore_errors: yes
+
+    - name: Wait for processes to terminate
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Ensure no locked files by using Handle.exe (Sysinternals)
+      ansible.windows.win_shell: |
+        $HandlePath = "C:\Temp\handle64.exe"
+        if (!(Test-Path $HandlePath)) {
+          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Handle.zip" -OutFile "C:\Temp\Handle.zip"
+          Expand-Archive -Path "C:\Temp\Handle.zip" -DestinationPath "C:\Temp"
+        }
+        & $HandlePath C:\xampp /accepteula | ForEach-Object {
+          if ($_ -match 'pid: (\d+)') {
+            Stop-Process -Id $matches[1] -Force -ErrorAction SilentlyContinue
+          }
+        }
+      ignore_errors: yes
+
+    - name: Run XAMPP uninstaller
+      ansible.windows.win_command: 'C:\xampp\uninstall.exe /S'
+      args:
+        removes: C:\xampp
+      ignore_errors: yes
+
+    - name: Wait for uninstallation to complete
+      ansible.builtin.pause:
+        seconds: 10
+
+    - name: Ensure all XAMPP processes are killed
+      ansible.windows.win_shell: |
+        Stop-Process -Name "httpd" -Force -ErrorAction SilentlyContinue
+        Stop-Process -Name "mysqld" -Force -ErrorAction SilentlyContinue
+        Stop-Process -Name "FileZillaServer" -Force -ErrorAction SilentlyContinue
+      ignore_errors: yes
+
+    - name: Remove XAMPP directory forcefully
+      ansible.windows.win_file:
+        path: C:\xampp
+        state: absent
+
+    - name: Remove XAMPP registry entries
+      ansible.windows.win_regedit:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - 'HKLM:\SOFTWARE\XAMPP'
+        - 'HKCU:\SOFTWARE\XAMPP'
+
+    - name: Remove XAMPP environment variables
+      ansible.windows.win_path:
+        name: PATH
+        elements:
+          - C:\xampp
+        state: absent

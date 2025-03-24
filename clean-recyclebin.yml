@@ -1,0 +1,34 @@
+---
+- name: Clean Recycle Bin on Windows
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: false
+  vars:
+    ansible_winrm_operation_timeout_sec: 120
+    ansible_winrm_read_timeout_sec: 180
+
+  tasks:
+    - name: Empty Recycle Bin using Shell COM Object
+      win_shell: |
+        $shell = New-Object -ComObject Shell.Application
+        $recycleBin = $shell.Namespace(10)
+        $recycleBin.Items() | ForEach-Object { $_.InvokeVerb("delete") }
+      args:
+        executable: powershell
+      register: recycle_bin_result
+      failed_when: recycle_bin_result.rc != 0
+
+    - name: Confirm Recycle Bin Cleanup
+      debug:
+        msg: "Recycle Bin emptied successfully!"
+
+    # - name: Empty Recycle Bin
+    #   win_shell: |
+    #     Clear-RecycleBin -Force
+    #   args:
+    #     executable: powershell
+    #   register: recycle_bin_result
+    #   failed_when: recycle_bin_result.rc != 0
+
+    # - name: Confirm Recycle Bin Cleanup
+    #   debug:
+    #     msg: "Recycle Bin emptied successfully!"

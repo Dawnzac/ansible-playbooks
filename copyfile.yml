@@ -1,0 +1,9 @@
+---
+- name: Copy file
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+     - name: Copy 'pycharm' from Local to Remote location
+       ansible.windows.win_copy:
+        src: /home/wiz/ansible_playbooks/python-3.10.0-amd64.exe
+        dest: C:\Users\public\Downloads\

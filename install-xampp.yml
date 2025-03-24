@@ -1,0 +1,87 @@
+---
+- name: Install XAMPP on Windows
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+
+    - name: Set XAMPP installation directory
+      ansible.builtin.set_fact:
+        xampp_install_path: "C:\\xampp"
+
+    - name: Define local XAMPP installer URL and filename
+      ansible.builtin.set_fact:
+        xampp_installer_url: "http://172.40.1.11:8000/xampp-windows-x64-installer.exe"
+        xampp_installer_path: "C:\\Temp\\xampp-installer.exe"
+
+    - name: Ensure Temp directory exists
+      ansible.windows.win_file:
+        path: "C:\\Temp"
+        state: directory
+
+    - name: Download XAMPP installer from local server
+      ansible.windows.win_get_url:
+        url: "{{ xampp_installer_url }}"
+        dest: "{{ xampp_installer_path }}"
+        force: yes
+
+    - name: Run XAMPP installer silently
+      ansible.windows.win_command: >
+        "{{ xampp_installer_path }}" --mode unattended --unattendedmodeui none --disable-components xampp_filezilla,xampp_tomcat
+      args:
+        creates: "{{ xampp_install_path }}\\xampp-control.exe"
+
+    - name: Wait for installation to complete
+      ansible.builtin.pause:
+        seconds: 20
+
+    - name: Add XAMPP to system PATH
+      ansible.windows.win_path:
+        name: PATH
+        elements:
+          - "{{ xampp_install_path }}"
+
+    - name: Ensure Apache service is running
+      ansible.windows.win_service:
+        name: "Apache2.4"
+        state: started
+
+    - name: Ensure MySQL service is running
+      ansible.windows.win_service:
+        name: "mysql"
+        state: started
+
+    - name: Remove XAMPP installer after installation
+      ansible.windows.win_file:
+        path: "{{ xampp_installer_path }}"
+        state: absent
+
+    - name: Find the currently logged-in user (fully sanitized)
+      ansible.windows.win_shell: |
+        (Get-WMIObject -Class Win32_ComputerSystem).UserName
+      register: logged_in_user_raw
+      tags:
+        - dis
+
+    - name: Strip newline characters in Ansible
+      set_fact:
+        logged_in_user: "{{ logged_in_user_raw.stdout | trim }}"
+      tags:
+        - dis
+
+    - name: Display final sanitized user
+      ansible.builtin.debug:
+        msg: "Final sanitized active user is '{{ logged_in_user }}'"
+      tags:
+        - dis
+
+    - name: Open phpMyAdmin in browser as active user
+      ansible.windows.win_shell: |
+        $taskName = "OpenPHPMyAdmin"
+        $taskAction = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c start http://localhost/phpmyadmin/"
+        $taskPrincipal = New-ScheduledTaskPrincipal -UserId "{{ logged_in_user }}" -LogonType Interactive
+        Register-ScheduledTask -TaskName $taskName -Action $taskAction -Principal $taskPrincipal -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(10)) -Force
+        Start-ScheduledTask -TaskName $taskName
+      args:
+        executable: powershell.exe
+      tags:
+        - dis

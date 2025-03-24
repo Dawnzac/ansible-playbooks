@@ -1,0 +1,116 @@
+---
+- name: Install Applications from Local Server
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: false
+  vars:
+    download_path: "C:\\Temp"
+    local_server_url: "http://172.40.1.11:8000"
+
+  tasks:
+    ### Step 1: Create Temp Directory for Downloads
+    - name: Ensure C:\Temp directory exists
+      win_file:
+        path: "{{ download_path }}"
+        state: directory
+
+    ### Step 2: Download Chrome Installer
+    - name: Download Google Chrome Installer
+      win_get_url:
+        url: "{{ local_server_url }}/googlechromestandaloneenterprise64.msi"
+        dest: "{{ download_path }}\\chrome_installer.msi"
+
+    ### Step 3: Download WinRAR Installer
+    - name: Download WinRAR Installer
+      win_get_url:
+        url: "{{ local_server_url }}/winrar-x64-701.exe"
+        dest: "{{ download_path }}\\winrar_installer.exe"
+
+    ### Step 4: Download Notepad++ Installer
+    - name: Download Notepad++ Installer
+      win_get_url:
+        url: "{{ local_server_url }}/npp.8.7.8.Installer.x64.exe"
+        dest: "{{ download_path }}\\notepadpp_installer.exe"
+
+    ### Step 5: Download XAMPP Installer
+    # - name: Download XAMPP Installer
+    #   win_get_url:
+    #     url: "{{ local_server_url }}/xampp_installer.exe"
+    #     dest: "{{ download_path }}\\xampp_installer.exe"
+
+    ### Step 6: Download NetBeans 8.2 Installer
+    - name: Download NetBeans 8.2 Installer
+      win_get_url:
+        url: "{{ local_server_url }}/jdk-8u111-nb-8_2-windows-x64.exe"
+        dest: "{{ download_path }}\\netbeans_installer.exe"
+
+    ### Step 7: Install Google Chrome Silently
+    - name: Install Google Chrome
+      win_shell: |
+        "{{ download_path }}\\chrome_installer.msi" /qn /norestart
+      args:
+        executable: cmd
+        chdir: "{{ download_path }}"
+      register: chrome_install
+      failed_when: chrome_install.rc != 0
+
+    ### Step 8: Install WinRAR Silently
+    - name: Install WinRAR
+      win_shell: |
+        "{{ download_path }}\\winrar_installer.exe" /S
+      args:
+        executable: cmd
+        chdir: "{{ download_path }}"
+      register: winrar_install
+      failed_when: winrar_install.rc != 0
+
+    ### Step 9: Install Notepad++ Silently
+    - name: Install Notepad++
+      win_shell: |
+        "{{ download_path }}\\notepadpp_installer.exe" /S
+      args:
+        executable: cmd
+        chdir: "{{ download_path }}"
+      register: notepadpp_install
+      failed_when: notepadpp_install.rc != 0
+
+    ### Step 10: Install XAMPP Silently
+    # - name: Install XAMPP
+    #   win_shell: |
+    #     "{{ download_path }}\\xampp_installer.exe" --mode unattended --unattendedmodeui minimal
+    #   args:
+    #     executable: cmd
+    #     chdir: "{{ download_path }}"
+    #   register: xampp_install
+    #   failed_when: xampp_install.rc != 0
+
+    ### Step 11: Install NetBeans 8.2 Silently
+    - name: Install NetBeans 8.2
+      win_shell: |
+        "{{ download_path }}\\netbeans_installer.exe" --silent
+      args:
+        executable: cmd
+        chdir: "{{ download_path }}"
+      register: netbeans_install
+      failed_when: netbeans_install.rc != 0
+
+    ### Step 12: Cleanup Installers (Optional)
+    - name: Delete installer files after installation
+      win_file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ download_path }}\\chrome_installer.exe"
+        - "{{ download_path }}\\winrar_installer.exe"
+        - "{{ download_path }}\\notepadpp_installer.exe"
+        - "{{ download_path }}\\xampp_installer.exe"
+        - "{{ download_path }}\\netbeans_installer.exe"
+
+    ### Step 13: Show Installation Results
+    - name: Display Installation Results
+      debug:
+        msg:
+          - "Google Chrome Install: {{ chrome_install.rc == 0 }}"
+          - "WinRAR Install: {{ winrar_install.rc == 0 }}"
+          - "Notepad++ Install: {{ notepadpp_install.rc == 0 }}"
+          - "XAMPP Install: {{ xampp_install.rc == 0 }}"
+          - "NetBeans 8.2 Install: {{ netbeans_install.rc == 0 }}"

@@ -1,0 +1,29 @@
+---
+- name: Install Turbo C++ on Windows 8
+  hosts: "{{ ansible_limit | default(omit) }}"
+  tasks:
+    - name: Download Turbo C++ installer
+      win_get_url:
+        url: "http://172.20.5.10:8000/Turbo_c.zip"
+        dest: "C:\\Users\\{{ ansible_user }}\\Downloads\\turbo_c.zip"
+
+    - name: Extract Turbo C++ installer
+      win_unzip:
+        src: "C:\\Users\\{{ ansible_user }}\\Downloads\\turbo_c.zip"
+        dest: "C:\\Users\\{{ ansible_user }}\\Downloads\\turbo_c"
+
+    - name: Install Turbo C++
+      win_package:
+        path: "C:\\Users\\{{ ansible_user }}\\Downloads\\turbo_c\\Turbo.C.3.2\\setup.exe"
+        arguments: "/S /v/qn"
+        state: present
+
+    #- name: Cleanup - Remove Turbo C++ installer
+     # win_file:
+      #  path: "C:\\Users\\{{ ansible_user }}\\Downloads\\turbocpp_installer.zip"
+       # state: absent
+
+    #- name: Cleanup - Remove extracted files
+     # win_file:
+      #  path: "C:\\Users\\{{ ansible_user }}\\Downloads\\turbocpp_installer"
+       # state: absent

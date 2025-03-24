@@ -1,0 +1,146 @@
+---
+- name: Create user and disable all other users on Windows (EXAM TASK)
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+    - name: Check if script has already been run
+      ansible.windows.win_stat:
+        path: C:\Windows\Temp\ansible_script_marker.txt
+      register: script_marker
+
+    - name: Skip if script has already run
+      meta: end_play
+      when: script_marker.stat.exists
+
+    - name: Get SID of 'exam' user
+      ansible.windows.win_shell: |
+        $sid = (New-Object System.Security.Principal.NTAccount("exam")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+        Write-Output $sid
+      register: exam_sid
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Remove profile entry from registry if exists
+      ansible.windows.win_shell: |
+        $sid = "{{ exam_sid.stdout }}"
+        $profileKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+        if (Test-Path $profileKey) {
+          Remove-Item -Path $profileKey -Force -Recurse
+          Write-Output "Profile entry removed: $profileKey"
+        } else {
+          Write-Output "No profile entry found for 'exam'."
+        }
+      when: exam_sid.stdout != ""
+      ignore_errors: yes
+      register: remove_profile_output
+
+    - name: Delete cached profiles for 'exam' user
+      ansible.windows.win_shell: |
+        $userProfilePath = "C:\Users\exam"
+        if (Test-Path $userProfilePath) {
+          Remove-Item -Path $userProfilePath -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Output "Deleted user profile: $userProfilePath"
+        } else {
+          Write-Output "Profile folder not found."
+        }
+      ignore_errors: yes
+      register: profile_delete_output
+
+    - name: Clean stale registry profiles if profile still lingers
+      ansible.windows.win_shell: |
+        $profilePath = "C:\Users\exam"
+        $sid = "{{ exam_sid.stdout }}"
+        if (Test-Path $profilePath -or (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid")) {
+          Write-Output "Warning: Profile or registry key still exists. Forcing cleanup..."
+          Remove-Item -Path $profilePath -Recurse -Force -ErrorAction SilentlyContinue
+          if ($sid) {
+            Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid" -Force -Recurse -ErrorAction SilentlyContinue
+          }
+        }
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Create user 'exam' with password
+      ansible.windows.win_user:
+        name: exam
+        password: "exam2025"
+        password_never_expires: yes
+        state: present
+        update_password: always
+        user_cannot_change_password: yes
+        account_disabled: no
+
+    - name: Enable interactive login for 'exam'
+      ansible.windows.win_shell: |
+        $sid = (New-Object System.Security.Principal.NTAccount("exam")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+        secedit /export /cfg C:\secpol.cfg
+        (Get-Content C:\secpol.cfg) -replace 'SeDenyInteractiveLogonRight.*', "SeDenyInteractiveLogonRight = " | Set-Content C:\secpol.cfg
+        secedit /import /cfg C:\secpol.cfg /quiet
+        Remove-Item C:\secpol.cfg -Force
+
+    - name: Show user 'exam' on login screen
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+        name: DontDisplayLastUsername
+        data: 0
+        type: dword
+        state: present
+
+    - name: Add 'exam' to local 'Users' group
+      ansible.windows.win_group_membership:
+        name: Users
+        members:
+          - exam
+        state: present
+
+    - name: Save Active users to marker file
+      ansible.windows.win_shell: |
+        $users = Get-LocalUser | Where-Object { $_.Enabled -eq $true -and $_.Name -ne 'Administrator' -and $_.Name -ne 'exam' } | Select-Object -ExpandProperty Name
+        if ($users) {
+          $users -join ',' | Set-Content C:\Windows\Temp\ansible_disabled_users.txt
+        } else {
+          Write-Output "" | Set-Content C:\Windows\Temp\ansible_disabled_users.txt
+        }
+      changed_when: false
+
+    - name: Get list of all active local users except Administrator and exam
+      ansible.windows.win_shell: |
+        $users = Get-LocalUser | Where-Object { $_.Enabled -eq $true -and $_.Name -ne 'Administrator' -and $_.Name -ne 'exam' } | Select-Object -ExpandProperty Name
+        if (-not $users) {
+          Write-Output "NO_USERS"
+        } else {
+          $users -join ','
+        }
+      register: active_users
+      changed_when: false
+
+    - name: Skip disabling users if no active users found
+      meta: end_play
+      when: active_users.stdout.strip() == "NO_USERS"
+
+    - name: Disable all other active users except Administrator and exam
+      ansible.windows.win_shell: |
+        $users = '{{ active_users.stdout.strip() }}' -split ','
+        foreach ($user in $users) {
+          Write-Output "Disabling user: $user"
+          Disable-LocalUser -Name $user -ErrorAction SilentlyContinue
+        }
+      register: disable_output
+      changed_when: "'Disabling user' in disable_output.stdout"
+
+    # - name: Force logout active sessions for disabled users
+    #   ansible.windows.win_shell: |
+    #     $sessions = quser | ForEach-Object { ($_ -split '\s{2,}')[0] } | Select-String -Pattern '{{ active_users.stdout_lines | join("|") }}' | ForEach-Object { logoff $_ }
+    #   register: logout_output
+    #   changed_when: false
+
+    - name: Create script marker to avoid re-running
+      ansible.windows.win_copy:
+        content: "Script run completed successfully."
+        dest: C:\Windows\Temp\ansible_script_marker.txt
+        force: yes
+
+    - name: Show disabled and logged-out users
+      debug:
+        var: disable_output.stdout_lines
+#sudo ansible-playbook create_and_lock_users.yml --limit 146 --ask-vault-pass
