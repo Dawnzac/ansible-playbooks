@@ -1,0 +1,21 @@
+---
+- name: Create or Enable User
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+
+  tasks:
+    - name: Enable previously disabled user
+      ansible.windows.win_shell: |
+        $user = "{{ target_user | default('exam') }}"
+        if ($user -ne "") {
+          Write-Output "Enabling user: $user"
+          Enable-LocalUser -Name $user -ErrorAction SilentlyContinue
+        } else {
+          Write-Output "No valid user to enable."
+        }
+      register: enable_user_result
+      changed_when: "'Enabling user' in enable_user_result.stdout"
+
+    - name: Show result of enabling user
+      debug:
+        msg: "{{ enable_user_result.stdout_lines }}"

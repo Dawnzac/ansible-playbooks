@@ -4,10 +4,16 @@
   gather_facts: no
 
   tasks:
-  - name: Ensure user is present
-    ansible.windows.win_user:
-      name: Macfast
-      password: 123
-      state: present
-      groups:
-        - Users
+    # - name: Ensure user is present
+    #   ansible.windows.win_user:
+    #     name: Macfast
+    #     password: 123
+    #     state: present
+    #     groups:
+    #       - Administrators
+    - name: Add user to Administrators group
+      ansible.windows.win_group_membership:
+        name: Administrators
+        members:
+          - "{{ target_user | default('exam') }}"
+        state: present

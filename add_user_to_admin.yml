@@ -1,0 +1,29 @@
+---
+- name: Add user to Administrators group
+  hosts: "{{ ansible_limit | default(omit) }}"
+  gather_facts: no
+  tasks:
+    - name: Check if user exists
+      ansible.windows.win_user:
+        name: "{{ target_user | default('exam') }}"
+      register: user_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Fail if user does not exist
+      fail:
+        msg: "The user '{{ target_user | default('exam') }}' does not exist. Create the user before adding to Administrators group."
+      when: user_check.failed
+
+    - name: Add user to Administrators group
+      ansible.windows.win_group_membership:
+        name: Administrators
+        members:
+          - "{{ target_user | default('exam') }}"
+        state: present
+      register: add_admin_result
+
+    - name: Show result of group addition
+      debug:
+        msg: "User '{{ target_user | default('exam') }}' successfully added to Administrators group."
+      when: add_admin_result.changed
